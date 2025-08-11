@@ -4,7 +4,6 @@ import com.bulletonrails.rinha.model.PaymentRequest;
 import com.bulletonrails.rinha.model.PaymentSummary;
 import com.bulletonrails.rinha.repository.PaymentRepository;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
@@ -29,17 +28,14 @@ public class PaymentService {
         Instant timestamp = Instant.now();
         HealthCheckService.ProcessorChoice choice = healthCheckService.getBestProcessor();
         
+        // Record immediately like winning submission
         if (choice == HealthCheckService.ProcessorChoice.DEFAULT) {
             repository.recordDefaultPayment(request.correlationId(), request.amount(), timestamp);
         } else {
             repository.recordFallbackPayment(request.correlationId(), request.amount(), timestamp);
         }
         
-        processPaymentAsync(request, choice);
-    }
-
-    @Async("paymentExecutor")
-    protected void processPaymentAsync(PaymentRequest request, HealthCheckService.ProcessorChoice choice) {
+        // Process synchronously for lower latency
         processorService.processPayment(request);
     }
 
