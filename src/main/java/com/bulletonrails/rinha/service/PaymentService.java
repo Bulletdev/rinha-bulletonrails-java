@@ -28,14 +28,12 @@ public class PaymentService {
         Instant timestamp = Instant.now();
         HealthCheckService.ProcessorChoice choice = healthCheckService.getBestProcessor();
         
-        // Record immediately like winning submission
         if (choice == HealthCheckService.ProcessorChoice.DEFAULT) {
             repository.recordDefaultPayment(request.correlationId(), request.amount(), timestamp);
         } else {
             repository.recordFallbackPayment(request.correlationId(), request.amount(), timestamp);
         }
         
-        // Process synchronously for lower latency
         processorService.processPayment(request);
     }
 
