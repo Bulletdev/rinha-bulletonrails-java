@@ -13,11 +13,11 @@ public class AsyncConfig implements AsyncConfigurer {
     @Bean(name = "paymentExecutor")
     public Executor paymentExecutor() {
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
-        executor.setCorePoolSize(20);
-        executor.setMaxPoolSize(50);
-        executor.setQueueCapacity(10000);
+        executor.setCorePoolSize(50);
+        executor.setMaxPoolSize(200);
+        executor.setQueueCapacity(1000);
         executor.setThreadNamePrefix("payment-");
-        executor.setKeepAliveSeconds(60);
+        executor.setKeepAliveSeconds(30);
         executor.setAllowCoreThreadTimeOut(true);
         executor.initialize();
         return executor;

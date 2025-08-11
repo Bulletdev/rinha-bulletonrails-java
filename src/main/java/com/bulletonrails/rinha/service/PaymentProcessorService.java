@@ -30,14 +30,14 @@ public class PaymentProcessorService {
         HealthCheckService.ProcessorChoice choice = healthCheckService.getBestProcessor();
 
         return callProcessor(choice.url, request)
-            .retryWhen(Retry.fixedDelay(2, Duration.ofMillis(100)))
+            .retryWhen(Retry.fixedDelay(1, Duration.ofMillis(50)))
             .onErrorResume(error -> {
                 HealthCheckService.ProcessorChoice fallback = choice == HealthCheckService.ProcessorChoice.DEFAULT
                     ? HealthCheckService.ProcessorChoice.FALLBACK 
                     : HealthCheckService.ProcessorChoice.DEFAULT;
 
                 return callProcessor(fallback.url, request)
-                    .retryWhen(Retry.fixedDelay(1, Duration.ofMillis(50)));
+                    .retryWhen(Retry.fixedDelay(1, Duration.ofMillis(25)));
             })
             .onErrorReturn(false);
     }
@@ -49,7 +49,7 @@ public class PaymentProcessorService {
             .retrieve()
             .bodyToMono(String.class)
             .map(response -> true)
-            .timeout(Duration.ofSeconds(3));
+            .timeout(Duration.ofMillis(600));
     }
 
     public HealthCheckService.ProcessorChoice getLastUsedProcessor(PaymentRequest request) {

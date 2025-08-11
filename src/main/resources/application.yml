@@ -3,17 +3,17 @@ server:
   port: 8080
   undertow:
     threads:
-      io: 4
-      worker: 20
+      io: 16
+      worker: 200
     buffer-size: 1024
     direct-buffers: true
+    max-http-post-size: 512KB
   compression:
-    enabled: true
-    min-response-size: 1024
+    enabled: false
 
 spring:
   main:
-    lazy-initialization: true
+    lazy-initialization: false
   jackson:
     default-property-inclusion: non_null
     serialization:
@@ -21,6 +21,15 @@ spring:
   mvc:
     async:
       request-timeout: 5000
+  task:
+    execution:
+      pool:
+        core-size: 50
+        max-size: 200
+        queue-capacity: 1000
+    scheduling:
+      pool:
+        size: 8
 
 logging:
   level:

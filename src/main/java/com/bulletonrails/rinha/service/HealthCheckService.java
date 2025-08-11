@@ -26,20 +26,16 @@ public class HealthCheckService {
         fallbackHealth.set(new HealthStatus(false, 100));
     }
 
-    @Scheduled(fixedRate = 5000)
+    @Scheduled(fixedRate = 10000)
     public void checkHealth() {
-        if (Duration.between(lastCheck.get(), Instant.now()).toSeconds() < 5) {
-            return;
-        }
-
         lastCheck.set(Instant.now());
 
         checkProcessorHealth("http://payment-processor-default:8080/payments/service-health")
-            .subscribe(health -> defaultHealth.set(health),
+            .subscribe(defaultHealth::set,
                       error -> defaultHealth.set(new HealthStatus(true, 1000)));
 
         checkProcessorHealth("http://payment-processor-fallback:8080/payments/service-health")
-            .subscribe(health -> fallbackHealth.set(health),
+            .subscribe(fallbackHealth::set,
                       error -> fallbackHealth.set(new HealthStatus(true, 1000)));
     }
 
@@ -48,7 +44,7 @@ public class HealthCheckService {
             .uri(url)
             .retrieve()
             .bodyToMono(HealthStatus.class)
-            .timeout(Duration.ofSeconds(2))
+            .timeout(Duration.ofMillis(300))
             .onErrorReturn(new HealthStatus(true, 1000));
     }
 
