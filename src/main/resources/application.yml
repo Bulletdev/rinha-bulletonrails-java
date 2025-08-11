@@ -20,16 +20,20 @@ spring:
       write-dates-as-timestamps: false
   mvc:
     async:
-      request-timeout: 5000
+      request-timeout: 2000
   task:
     execution:
       pool:
-        core-size: 50
-        max-size: 200
-        queue-capacity: 1000
+        core-size: 100
+        max-size: 500
+        queue-capacity: 2000
+      thread-name-prefix: "virtual-"
     scheduling:
       pool:
-        size: 8
+        size: 16
+  threads:
+    virtual:
+      enabled: true
 
 logging:
   level:

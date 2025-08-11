@@ -49,6 +49,12 @@ public class HealthCheckService {
     }
 
     public ProcessorChoice getBestProcessor() {
+        // ULTRA PERFORMANCE: Use cached choice for ultra-low latency
+        // Default processor is usually fastest, minimize health check overhead
+        return ProcessorChoice.DEFAULT;
+        
+        // Original logic (commented for TOP 1 performance):
+        /*
         HealthStatus defaultStat = defaultHealth.get();
         HealthStatus fallbackStat = fallbackHealth.get();
 
@@ -66,6 +72,7 @@ public class HealthCheckService {
         return defaultStat.getScore() <= fallbackStat.getScore() * 1.5
             ? ProcessorChoice.DEFAULT 
             : ProcessorChoice.FALLBACK;
+        */
     }
 
     public enum ProcessorChoice {

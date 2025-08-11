@@ -16,15 +16,15 @@ ENV JAVA_OPTS="-server \
     -XX:+UseG1GC \
     -XX:+UseStringDeduplication \
     -XX:+DisableExplicitGC \
-    -XX:+UnlockExperimentalVMOptions \
-    -XX:+UseJVMCICompiler \
-    -XX:MaxGCPauseMillis=10 \
-    -XX:G1HeapRegionSize=4m \
-    -Xmx120m \
-    -Xms120m \
-    -XX:MaxDirectMemorySize=20m \
+    -XX:MaxGCPauseMillis=5 \
+    -XX:G1HeapRegionSize=2m \
+    -Xmx100m \
+    -Xms100m \
+    -XX:MaxDirectMemorySize=10m \
     -XX:+TieredCompilation \
     -XX:TieredStopAtLevel=1 \
+    -XX:+AlwaysPreTouch \
+    -XX:+UseFastUnorderedTimeStamps \
     -Xlog:disable \
     -XX:-PrintGC \
     -XX:-PrintGCDetails"
