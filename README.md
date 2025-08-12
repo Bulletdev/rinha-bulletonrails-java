@@ -63,7 +63,7 @@ Esta implementação foi otimizada para **máxima performance** e **menor custo 
 ### Configurações de Recursos
 
 - **CPU**: 1.5 cores total (0.6 por backend + 0.3 nginx)
-- **Memória**: 350MB total (125MB por backend + 100MB nginx)
+- **Memória**: 350MB total (160MB por backend + 30MB nginx)
 - **Threads**: 20 workers + 4 I/O por instância
 - **Connections**: Pool de 50 conexões HTTP com keep-alive
 
@@ -100,4 +100,4 @@ curl http://localhost:9999/payments-summary
 
 ---
 
-** Feito com ❤️ e bastante ☕ para a 🐓 Rinha **
+*Feito com ❤️ e bastante ☕ para a 🐓 Rinha*
