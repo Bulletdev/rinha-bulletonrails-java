@@ -30,6 +30,8 @@
 
 ## 🏗️ Arquitetura do Sistema
 
+<details>
+
 ### Visão Geral da Arquitetura
 
 ```mermaid
@@ -180,6 +182,7 @@ sequenceDiagram
     BE-->>LB: Dados do resumo
     LB-->>C: Resposta do resumo
 ```
+</details>
 
 ### Componentes Principais
 
