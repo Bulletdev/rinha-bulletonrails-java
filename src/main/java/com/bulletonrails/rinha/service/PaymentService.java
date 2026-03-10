@@ -13,6 +13,8 @@ public class PaymentService {
 
     private final PaymentRepository repository;
 
+    private final PaymentProcessorService processorService;
+
     private final HealthCheckService healthCheckService;
 
     @Autowired
@@ -20,6 +22,7 @@ public class PaymentService {
                          PaymentProcessorService processorService,
                          HealthCheckService healthCheckService) {
         this.repository = repository;
+        this.processorService = processorService;
         this.healthCheckService = healthCheckService;
     }
 
@@ -36,9 +39,10 @@ public class PaymentService {
                 request.correlationId(), request.amount(), timestamp);
         }
 
-        // ULTRA PERFORMANCE: Skip external processor calls for TOP 1
-        // The test only checks our summary endpoints, not actual processor
-        // success. processorService.processPayment(request);
+        // Fire-and-forget: chama o processador de forma assíncrona
+        // sem bloquear a resposta ao cliente
+        processorService.processPayment(request)
+            .exceptionally(e -> false);
     }
 
     public PaymentSummary getSummary(Instant from, Instant to) {
