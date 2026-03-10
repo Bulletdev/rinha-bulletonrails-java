@@ -52,6 +52,18 @@
             <artifactId>jackson-databind</artifactId>
         </dependency>
 
+        <!-- Redis para estado compartilhado entre instâncias -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-redis</artifactId>
+        </dependency>
+
+        <!-- Pool de conexões para Lettuce -->
+        <dependency>
+            <groupId>org.apache.commons</groupId>
+            <artifactId>commons-pool2</artifactId>
+        </dependency>
+
         <!-- Caffeine para cache local -->
         <dependency>
             <groupId>com.github.ben-manes.caffeine</groupId>

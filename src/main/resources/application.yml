@@ -34,6 +34,18 @@ spring:
   threads:
     virtual:
       enabled: true
+  data:
+    redis:
+      host: ${REDIS_HOST:redis}
+      port: ${REDIS_PORT:6379}
+      timeout: 500ms
+      connect-timeout: 500ms
+      lettuce:
+        pool:
+          max-active: 32
+          min-idle: 8
+          max-idle: 16
+          max-wait: 200ms
 
 logging:
   level:
