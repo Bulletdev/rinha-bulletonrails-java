@@ -189,70 +189,67 @@ sequenceDiagram
 | Componente | Responsabilidade | Tecnologia |
 |------------|------------------|------------|
 | **Nginx Load Balancer** | Balanceamento de carga entre instâncias | Nginx Alpine |
+| **Redis** | Estado compartilhado entre instâncias | Redis 7 Alpine |
 | **PaymentController** | Endpoints REST para pagamentos | Spring Boot |
-| **PaymentService** | Lógica de negócio principal | Spring Service |
-| **HealthCheckService** | Monitoramento de processadores | Scheduled Tasks |
-| **PaymentProcessorService** | Interface com processadores externos | WebClient |
-| **PaymentRepository** | Armazenamento em memória | ConcurrentHashMap |
-| **WebClient** | Pool de conexões HTTP otimizado | Spring WebFlux |
+| **PaymentService** | Lógica de negócio + optimistic recording | Spring Service |
+| **HealthCheckService** | Monitoramento e routing inteligente | Scheduled Tasks |
+| **PaymentProcessorService** | HTTP reativo com retry e fallback | WebClient |
+| **PaymentRepository** | Leitura/escrita no Redis com pipelining | Spring Data Redis |
 
-##  Estratégia de Performance
+## Estratégia de Performance
 
-Esta implementação foi otimizada para **máxima performance** e **menor custo por transação**
+Otimizada para **máxima throughput** e **menor custo por transação** dentro dos limites da Rinha.
 
-### Otimizações Principais
+### Fluxo de Pagamento
 
-- **Undertow** ao invés de Tomcat (30% mais rápido)
-- **Processamento assíncrono** em lotes com filas otimizadas
-- **Health Check inteligente** com cache de 5s e fallback automático
-- **Pool de conexões HTTP** otimizado com keep-alive
-- **Repository em memória** com estruturas lock-free (LongAdder)
-- **JVM tuning agressivo** para baixa latência
+1. **Optimistic recording**: pagamento gravado no Redis antes de chamar o processador
+2. **Fire-and-forget**: chamada ao processador é assíncrona — não bloqueia o cliente
+3. **Routing inteligente**: `HealthCheckService` escolhe DEFAULT ou FALLBACK por score
 
+### Estratégia de Escolha de Processador
 
+1. Health check a cada **5s** com timeout de **300ms**
+2. Score = `minResponseTime` retornado pelo processador
+3. Prefere DEFAULT se score ≤ 1.5× o do FALLBACK
+4. Fallback automático quando DEFAULT está falhando
+5. Retry com delay fixo (1 retry, 50ms) + fallback entre processadores
 
-###  Estratégia de Escolha de Processador
+### Otimizações de Performance
 
-1. **Health Check periódico** a cada 5s respeitando rate limit
-2. **Score inteligente**: tempo de resposta + disponibilidade
-3. **Preferência pelo default** (menor taxa) com tolerância 1.5x no tempo
-4. **Circuit breaker** automático com retry e fallback
-5. **Fallback inteligente** quando processador principal falha
-
-### ⚡ Otimizações de Performance
-
-- **Virtual Threads** para I/O não-bloqueante
-- **G1GC** com pausa máxima de 10ms
-- **String deduplication** para economia de memória
-- **Tiered compilation** nivel 1 para startup rápido
-- **Buffer sizes** otimizados (1KB-4KB)
-- **Keep-alive** em todas as conexões HTTP
+- **Redis com pipelining**: 3 comandos por escrita em 1 round-trip
+- **Virtual Threads** (Java 21) para I/O eficiente
+- **G1GC** com pausa máxima de 5ms
+- **Undertow** no lugar de Tomcat
+- **Connection pool**: 200 conexões HTTP com keep-alive
+- **Nginx**: least_conn, keepalive 256, epoll
 
 ### Configurações de Recursos
 
-- **CPU**: 1.5 cores total (0.6 por backend + 0.3 nginx)
-- **Memória**: 350MB total (160MB por backend + 30MB nginx)
-- **Threads**: 20 workers + 4 I/O por instância
-- **Connections**: Pool de 50 conexões HTTP com keep-alive
+| Container | CPU | RAM |
+|---|---|---|
+| Redis | 0.1 | 30MB |
+| backend-1 | 0.6 | 150MB |
+| backend-2 | 0.6 | 150MB |
+| Nginx | 0.2 | 20MB |
+| **Total** | **1.5** | **350MB** |
 
 ### Tecnologias Utilizadas
 
 - **Java 21** com Virtual Threads
-- **Spring Boot 3.3** com WebFlux
+- **Spring Boot 3.3** (Web + WebFlux + Data Redis)
+- **Redis 7** para estado compartilhado entre instâncias
 - **Undertow** como servidor web
 - **Nginx** com least_conn balancing
-- **Caffeine** cache local
-- **Repository in-memory** otimizado
+- **Lettuce** com pool de conexões Redis
 
-### 🏃‍♂ Como Executar
+### Como Executar
 
 ```bash
-# 1. Subir os Payment Processors primeiro
-cd payment-processor
-docker-compose up -d
+# 1. Subir os Payment Processors (dependência externa)
+cd payment-processor && docker-compose up -d
 
-# 2. Subir o backend
-docker-compose up -d
+# 2. Subir o backend completo
+cd .. && docker-compose up -d
 
 # 3. Testar
 curl -X POST http://localhost:9999/payments \
@@ -260,11 +257,13 @@ curl -X POST http://localhost:9999/payments \
   -d '{"correlationId": "550e8400-e29b-41d4-a716-446655440000", "amount": 19.90}'
 
 curl http://localhost:9999/payments-summary
+
+curl "http://localhost:9999/payments-summary?from=2026-01-01T00:00:00Z&to=2026-12-31T23:59:59Z"
 ```
 
 ### Objetivo
 
-**Maximizar o lucro** processando o máximo de pagamentos possível com a **menor taxa** (processador default), mantendo **alta disponibilidade** e **baixa latência** (p99 < 10ms para bônus de performance).
+**Maximizar o lucro** processando pagamentos com a **menor taxa** (processador default), mantendo **consistência entre instâncias** via Redis e **baixa latência** (P99 < 100ms).
 
 ---
 

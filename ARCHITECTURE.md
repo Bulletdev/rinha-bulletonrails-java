@@ -2,205 +2,147 @@
 
 ## Visão Geral
 
-Este projeto implementa um sistema de processamento de pagamentos de alta performance para a Rinha de Backend, utilizando Java 21 com Spring Boot 3.3 e arquitetura de microserviços.
+Sistema de processamento de pagamentos de alta performance para a
+Rinha de Backend, usando Java 21 + Spring Boot 3.3, Redis para estado
+compartilhado e Nginx como load balancer.
 
 ## Arquitetura Geral
 
 ### Camadas da Aplicação
 
 1. **Camada de Apresentação (Controller Layer)**
-   - `PaymentController`: Responsável pelos endpoints REST
-   - Endpoints disponíveis:
-     - `POST /payments` - Recebe pagamentos
-     - `GET /payments-summary` - Retorna resumo de pagamentos
-     - `POST /purge-payments` - Limpa dados de pagamentos
+   - `PaymentController`: Endpoints REST
+     - `POST /payments` — recebe e roteia pagamentos
+     - `GET /payments-summary` — resumo por processador (com filtro de data)
+     - `POST /purge-payments` — limpa dados
 
 2. **Camada de Serviço (Service Layer)**
-   - `PaymentService`: Lógica de negócio principal
-   - `HealthCheckService`: Monitoramento de saúde dos processadores
-   - `PaymentProcessorService`: Interface com processadores externos
+   - `PaymentService`: registra otimisticamente no Redis e dispara
+     chamada assíncrona ao processador (fire-and-forget)
+   - `HealthCheckService`: monitora saúde dos processadores a cada 5s
+     e implementa routing inteligente por score
+   - `PaymentProcessorService`: HTTP reativo com retry e fallback entre
+     processadores
 
 3. **Camada de Dados (Repository Layer)**
-   - `PaymentRepository`: Armazenamento em memória otimizado
-   - Utiliza estruturas thread-safe (ConcurrentHashMap, LongAdder)
+   - `PaymentRepository`: Redis via `StringRedisTemplate` com pipelining
+     nas escritas para menor latência
+   - Contadores atômicos: `INCR` / `INCRBY` no Redis
+   - Registros individuais: sorted set `ZADD` com score = epoch ms
 
 4. **Camada de Configuração**
-   - `HttpClientConfig`: Configuração do pool de conexões
-   - `WebClient`: Cliente HTTP otimizado com keep-alive
+   - `HttpClientConfig`: WebClient com pool de 200 conexões, keep-alive
+   - `AsyncConfig`: thread pools para processamento assíncrono
 
 ## Componentes Detalhados
 
 ### PaymentController
-- **Responsabilidade**: Exponir endpoints REST
-- **Tecnologia**: Spring Boot REST Controller
-- **Endpoints**:
-  - Recebimento de pagamentos com validação
-  - Consulta de resumos com filtros por data
-  - Operações de limpeza de dados
+- Expõe endpoints REST
+- Filtro de data (`from`/`to`) repassado ao serviço como `Instant`
 
 ### PaymentService
-- **Responsabilidade**: Coordenar o processamento de pagamentos
-- **Funcionalidades**:
-  - Escolha inteligente de processador
-  - Registro de pagamentos no repositório
-  - Geração de resumos
+- **Optimistic recording**: pagamento registrado no Redis antes da
+  chamada ao processador → resposta rápida
+- **Fire-and-forget**: `processorService.processPayment()` executado
+  de forma assíncrona, sem bloquear o cliente
+- Routing via `HealthCheckService.getBestProcessor()`
 
 ### HealthCheckService
-- **Responsabilidade**: Monitorar saúde dos processadores
-- **Estratégia**:
-  - Health checks a cada 10 segundos
-  - Cache de status para reduzir latência
-  - Fallback automático entre processadores
-  - Score baseado em tempo de resposta
+- Health checks a cada **5 segundos** (reduzido de 10s)
+- Score baseado em `minResponseTime` retornado pelo processador
+- Prefere DEFAULT quando seu score ≤ 1.5× o do FALLBACK
+- Fallback automático se DEFAULT falhar
 
 ### PaymentProcessorService
-- **Responsabilidade**: Interface com processadores externos
-- **Características**:
-  - Retry automático com backoff
-  - Circuit breaker pattern
-  - Timeout configurável (600ms)
-  - Fallback entre processadores
+- Retry com delay fixo (1 retry, 50ms)
+- Fallback automático para o outro processador em caso de erro
+- Timeout de 600ms por chamada
 
-### PaymentRepository
-- **Responsabilidade**: Armazenamento otimizado em memória
-- **Estruturas**:
-  - `ConcurrentHashMap` para dados de pagamentos
-  - `LongAdder` para contadores (thread-safe)
-  - Operações atômicas para consistência
+### PaymentRepository — Redis
+| Operação | Comando Redis |
+|---|---|
+| Incrementar contador | `INCR pay:d:req` |
+| Somar valor | `INCRBY pay:d:amt <cents>` |
+| Gravar registro | `ZADD pay:rec <epoch_ms> "<uuid>\|<cents>\|<1/0>"` |
+| Summary geral | 4× `GET` em pipeline |
+| Summary filtrado | `ZRANGEBYSCORE` + agregação client-side |
+| Purge | `DEL` das 5 chaves |
+
+Escritas usam `executePipelined` — 3 comandos em 1 round-trip.
 
 ## Arquitetura de Deploy
 
 ### Containers Docker
 
-1. **Load Balancer (Nginx)**
-   - **Imagem**: nginx:alpine
-   - **Recursos**: 0.2 CPU cores, 30MB RAM
-   - **Estratégia**: least_conn balancing
-   - **Port**: 9999 (externo) → 80 (interno)
-
-2. **Backend Instances (2x)**
-   - **Imagem**: Custom Spring Boot
-   - **Recursos**: 0.65 CPU cores, 160MB RAM cada
-   - **Port**: 8085
-   - **JVM**: Java 21 com Virtual Threads
-
-3. **Payment Processors (Externos)**
-   - **Default**: payment-processor-default:8080
-   - **Fallback**: payment-processor-fallback:8080
-   - **Rede**: payment-processor (externa)
+| Container | CPU | RAM | Função |
+|---|---|---|---|
+| Redis 7 Alpine | 0.1 | 30MB | Estado compartilhado |
+| backend-1 | 0.6 | 150MB | Instância Spring Boot |
+| backend-2 | 0.6 | 150MB | Instância Spring Boot |
+| load-balancer | 0.2 | 20MB | Nginx least_conn |
+| **Total** | **1.5** | **350MB** | |
 
 ### Redes Docker
 
-- **backend**: Rede interna para comunicação LB ↔ Backend
-- **payment-processor**: Rede externa para processadores
+- **backend**: comunicação interna LB ↔ Backends ↔ Redis
+- **payment-processor**: rede externa para os processadores
 
-## Fluxos de Dados
+## Fluxo de Pagamento
 
-### Fluxo de Pagamento
+```
+Cliente → Nginx (least_conn)
+       → Backend (qualquer instância)
+         → HealthCheckService.getBestProcessor()    ← cache em memória
+         → PaymentRepository.record*Payment()       → Redis (pipeline)
+         → PaymentProcessorService.processPayment() → Processador externo (async)
+         → 200 OK
+```
 
-1. Cliente envia `POST /payments`
-2. Nginx roteia para uma instância backend
-3. PaymentController recebe a requisição
-4. PaymentService consulta HealthCheckService
-5. HealthCheckService retorna melhor processador
-6. PaymentService registra no PaymentRepository
-7. Resposta 200 OK retornada
+## Fluxo de Summary
 
-### Fluxo de Resumo
-
-1. Cliente solicita `GET /payments-summary`
-2. PaymentController processa filtros de data
-3. PaymentService consulta PaymentRepository
-4. Repository retorna dados agregados
-5. Resumo em JSON retornado
-
-### Fluxo de Health Check
-
-1. HealthCheckService executa a cada 10s
-2. Consulta status dos processadores via WebClient
-3. Calcula score baseado em tempo de resposta
-4. Atualiza cache interno de status
-5. getBestProcessor() usa cache para decisão
+```
+Cliente → Nginx → Backend
+       → PaymentRepository.getSummary(from, to)
+         → Redis ZRANGEBYSCORE (filtro) ou 4× GET (total)
+       → JSON response
+```
 
 ## Otimizações de Performance
 
-### JVM e Runtime
-- **Java 21** com Virtual Threads
-- **G1GC** com pausa máxima de 10ms
-- **String deduplication** para economia de memória
-- **Tiered compilation** nível 1 para startup rápido
+### Escrita (hot path)
+- Registro no Redis em pipeline: 1 round-trip para 3 comandos
+- Chamada ao processador assíncrona: não bloqueia resposta
+- Virtual Threads (Java 21): I/O eficiente sem overhead de threads OS
 
-### HTTP e Rede
-- **Undertow** servidor web (vs Tomcat)
-- **Connection pooling** com keep-alive
-- **Compressão gzip** no Nginx
-- **Buffer sizes** otimizados (1KB-4KB)
+### Leitura (summary)
+- Summary total: 4 GETs em pipeline — sem iteração
+- Summary filtrado: ZRANGEBYSCORE + loop no cliente
 
-### Dados e Memória
-- **Estruturas lock-free** (LongAdder, ConcurrentHashMap)
-- **Cache em memória** para health status
-- **Hardcoded values** para máxima performance na Rinha
+### JVM
+- G1GC com pausa máxima de 5ms
+- Heap fixo em 100MB (`-Xms100m -Xmx100m`)
+- TieredCompilation nível 1 para startup rápido (~3s)
+- `-XX:+AlwaysPreTouch` para pré-alocar heap
 
-### Algoritmos
-- **Least connections** balancing no Nginx
-- **Circuit breaker** com fallback automático
-- **Timeout agressivos** (300ms health, 600ms processor)
-- **Retry com backoff** exponencial
+### HTTP / Rede
+- Undertow (substitui Tomcat)
+- Connection pool: 200 conexões, keep-alive
+- Nginx: least_conn, keepalive 256, epoll
 
-## Métricas e Monitoramento
+## Decisões de Arquitetura
 
-### Health Check Metrics
-- Tempo de resposta dos processadores
-- Taxa de sucesso/falha
-- Disponibilidade dos serviços
+### Por que Redis para estado compartilhado?
+Com 2 instâncias backend em memória isolada, o `GET /payments-summary`
+retornaria valores inconsistentes dependendo de qual instância
+respondesse. Redis resolve isso com operações atômicas sem necessidade
+de sincronização entre instâncias.
 
-### Business Metrics
-- Total de pagamentos processados
-- Valor total por processador
-- Taxa de utilização default vs fallback
+### Por que optimistic recording + fire-and-forget?
+Gravar primeiro e chamar o processador depois garante que o P99 não
+seja afetado pela latência do processador externo. A chamada assíncrona
+ainda chega ao processador, mas o cliente recebe 200 OK imediatamente.
 
-## Considerações de Escalabilidade
-
-### Horizontal Scaling
-- Backend stateless permite múltiplas instâncias
-- Load balancer suporta adição de novos backends
-- Repository em memória (limitação atual)
-
-### Vertical Scaling
-- Virtual Threads reduzem necessidade de threads OS
-- Pool de conexões otimizado para alta concorrência
-- GC tuning para baixa latência
-
-### Limitações Atuais
-- Dados apenas em memória (não persistem)
-- Health check centralizado por instância
-- Dependência de processadores externos
-
-## Segurança
-
-### Network Security
-- Isolamento via redes Docker
-- Exposição mínima de portas
-- Timeout para prevenir DoS
-
-### Application Security
-- Validação de input nos controllers
-- Sanitização de dados de entrada
-- Rate limiting via health check intervals
-
-## Manutenibilidade
-
-### Code Organization
-- Separação clara de responsabilidades
-- Injeção de dependência via Spring
-- Configuração externa via application.yml
-
-### Testing Strategy
-- Unit tests para lógica de negócio
-- Integration tests para endpoints
-- Performance tests para validação
-
-### Deployment
-- Docker Compose para orquestração
-- Health checks para container readiness
-- Graceful shutdown configuration
+### Por que sorted set para registros individuais?
+`ZADD` com score = timestamp permite queries eficientes de range
+(`ZRANGEBYSCORE`) sem varrer todos os dados. Complexidade O(log N + M)
+onde M é o número de resultados no intervalo.
