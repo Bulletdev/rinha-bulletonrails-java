@@ -10,12 +10,7 @@ public record PaymentRequest(
     @JsonProperty("amount") BigDecimal amount
 ) {
     public PaymentProcessorRequest toProcessorRequest() {
-        return new PaymentProcessorRequest(correlationId, amount, Instant.now());
+        return new PaymentProcessorRequest(
+            correlationId, amount, Instant.now());
     }
 }
-
-record PaymentProcessorRequest(
-    @JsonProperty("correlationId") UUID correlationId,
-    @JsonProperty("amount") BigDecimal amount,
-    @JsonProperty("requestedAt") Instant requestedAt
-) {}

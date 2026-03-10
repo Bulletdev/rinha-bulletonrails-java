@@ -5,6 +5,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
+import java.io.UncheckedIOException;
+
 @Component
 public class JsonUtils {
 
@@ -19,7 +21,7 @@ public class JsonUtils {
         try {
             return objectMapper.writeValueAsString(obj);
         } catch (JsonProcessingException e) {
-            throw new RuntimeException("Error converting to JSON", e);
+            throw new UncheckedIOException("Error converting to JSON", e);
         }
     }
 
@@ -27,7 +29,7 @@ public class JsonUtils {
         try {
             return objectMapper.readValue(json, clazz);
         } catch (JsonProcessingException e) {
-            throw new RuntimeException("Error parsing JSON", e);
+            throw new UncheckedIOException("Error parsing JSON", e);
         }
     }
 }
