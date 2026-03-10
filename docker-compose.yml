@@ -1,17 +1,40 @@
 services:
+  redis:
+    image: redis:7-alpine
+    container_name: bulletonrails_redis
+    command: >
+      redis-server
+      --save ""
+      --appendonly no
+      --maxmemory 25mb
+      --maxmemory-policy allkeys-lru
+      --tcp-backlog 511
+      --tcp-keepalive 60
+    networks:
+      - backend
+    deploy:
+      resources:
+        limits:
+          cpus: '0.1'
+          memory: '30MB'
+    restart: unless-stopped
+
   backend-1:
     build: .
     environment:
       SERVER_PORT: 8085
       SPRING_PROFILES_ACTIVE: production
+      REDIS_HOST: redis
+    depends_on:
+      - redis
     networks:
       - backend
       - payment-processor
     deploy:
       resources:
         limits:
-          cpus: '0.65'
-          memory: '160MB'
+          cpus: '0.6'
+          memory: '150MB'
     restart: unless-stopped
 
   backend-2:
@@ -19,14 +42,17 @@ services:
     environment:
       SERVER_PORT: 8085
       SPRING_PROFILES_ACTIVE: production
+      REDIS_HOST: redis
+    depends_on:
+      - redis
     networks:
       - backend
       - payment-processor
     deploy:
       resources:
         limits:
-          cpus: '0.65'
-          memory: '160MB'
+          cpus: '0.6'
+          memory: '150MB'
     restart: unless-stopped
 
   load-balancer:
@@ -45,7 +71,7 @@ services:
       resources:
         limits:
           cpus: "0.2"
-          memory: "30MB"
+          memory: "20MB"
     restart: unless-stopped
 
 networks:
