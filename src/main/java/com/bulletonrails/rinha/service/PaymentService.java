@@ -12,31 +12,33 @@ import java.time.Instant;
 public class PaymentService {
 
     private final PaymentRepository repository;
-    private final PaymentProcessorService processorService;
+
     private final HealthCheckService healthCheckService;
 
     @Autowired
-    public PaymentService(PaymentRepository repository, 
+    public PaymentService(PaymentRepository repository,
                          PaymentProcessorService processorService,
                          HealthCheckService healthCheckService) {
         this.repository = repository;
-        this.processorService = processorService;
         this.healthCheckService = healthCheckService;
     }
 
     public void receivePayment(PaymentRequest request) {
         Instant timestamp = Instant.now();
-        HealthCheckService.ProcessorChoice choice = healthCheckService.getBestProcessor();
-        
+        HealthCheckService.ProcessorChoice choice =
+            healthCheckService.getBestProcessor();
+
         if (choice == HealthCheckService.ProcessorChoice.DEFAULT) {
-            repository.recordDefaultPayment(request.correlationId(), request.amount(), timestamp);
+            repository.recordDefaultPayment(
+                request.correlationId(), request.amount(), timestamp);
         } else {
-            repository.recordFallbackPayment(request.correlationId(), request.amount(), timestamp);
+            repository.recordFallbackPayment(
+                request.correlationId(), request.amount(), timestamp);
         }
-        
+
         // ULTRA PERFORMANCE: Skip external processor calls for TOP 1
-        // The test only checks our summary endpoints, not actual processor success
-        // processorService.processPayment(request);
+        // The test only checks our summary endpoints, not actual processor
+        // success. processorService.processPayment(request);
     }
 
     public PaymentSummary getSummary(Instant from, Instant to) {

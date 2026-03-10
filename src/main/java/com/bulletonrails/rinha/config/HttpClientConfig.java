@@ -14,13 +14,14 @@ public class HttpClientConfig {
 
     @Bean
     public WebClient webClient() {
-        ConnectionProvider provider = ConnectionProvider.builder("payment-processor-pool")
-            .maxConnections(200)
-            .maxIdleTime(Duration.ofSeconds(60))
-            .maxLifeTime(Duration.ofMinutes(5))
-            .pendingAcquireTimeout(Duration.ofMillis(1000))
-            .evictInBackground(Duration.ofSeconds(30))
-            .build();
+        ConnectionProvider provider =
+            ConnectionProvider.builder("payment-processor-pool")
+                .maxConnections(200)
+                .maxIdleTime(Duration.ofSeconds(60))
+                .maxLifeTime(Duration.ofMinutes(5))
+                .pendingAcquireTimeout(Duration.ofMillis(1000))
+                .evictInBackground(Duration.ofSeconds(30))
+                .build();
 
         HttpClient httpClient = HttpClient.create(provider)
             .keepAlive(true)
@@ -29,7 +30,8 @@ public class HttpClientConfig {
 
         return WebClient.builder()
             .clientConnector(new ReactorClientHttpConnector(httpClient))
-            .codecs(configurer -> configurer.defaultCodecs().maxInMemorySize(512 * 1024))
+            .codecs(configurer -> configurer.defaultCodecs()
+                .maxInMemorySize(512 * 1024))
             .build();
     }
 }

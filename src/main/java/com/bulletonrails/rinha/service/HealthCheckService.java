@@ -15,9 +15,15 @@ import java.util.concurrent.atomic.AtomicReference;
 public class HealthCheckService {
 
     private final WebClient webClient;
-    private final AtomicReference<HealthStatus> defaultHealth = new AtomicReference<>();
-    private final AtomicReference<HealthStatus> fallbackHealth = new AtomicReference<>();
-    private final AtomicReference<Instant> lastCheck = new AtomicReference<>(Instant.EPOCH);
+
+    private final AtomicReference<HealthStatus> defaultHealth =
+        new AtomicReference<>();
+
+    private final AtomicReference<HealthStatus> fallbackHealth =
+        new AtomicReference<>();
+
+    private final AtomicReference<Instant> lastCheck =
+        new AtomicReference<>(Instant.EPOCH);
 
     @Autowired
     public HealthCheckService(WebClient webClient) {
@@ -30,13 +36,15 @@ public class HealthCheckService {
     public void checkHealth() {
         lastCheck.set(Instant.now());
 
-        checkProcessorHealth("http://payment-processor-default:8080/payments/service-health")
+        checkProcessorHealth(
+                "http://payment-processor-default:8080/payments/service-health")
             .subscribe(defaultHealth::set,
-                      error -> defaultHealth.set(new HealthStatus(true, 1000)));
+                error -> defaultHealth.set(new HealthStatus(true, 1000)));
 
-        checkProcessorHealth("http://payment-processor-fallback:8080/payments/service-health")
+        checkProcessorHealth(
+                "http://payment-processor-fallback:8080/payments/service-health")
             .subscribe(fallbackHealth::set,
-                      error -> fallbackHealth.set(new HealthStatus(true, 1000)));
+                error -> fallbackHealth.set(new HealthStatus(true, 1000)));
     }
 
     private Mono<HealthStatus> checkProcessorHealth(String url) {
@@ -52,7 +60,7 @@ public class HealthCheckService {
         // ULTRA PERFORMANCE: Use cached choice for ultra-low latency
         // Default processor is usually fastest, minimize health check overhead
         return ProcessorChoice.DEFAULT;
-        
+
         // Original logic (commented for TOP 1 performance):
         /*
         HealthStatus defaultStat = defaultHealth.get();
@@ -70,7 +78,7 @@ public class HealthCheckService {
         }
 
         return defaultStat.getScore() <= fallbackStat.getScore() * 1.5
-            ? ProcessorChoice.DEFAULT 
+            ? ProcessorChoice.DEFAULT
             : ProcessorChoice.FALLBACK;
         */
     }

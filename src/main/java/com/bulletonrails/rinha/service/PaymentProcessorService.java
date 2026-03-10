@@ -14,10 +14,12 @@ import java.util.concurrent.CompletableFuture;
 public class PaymentProcessorService {
 
     private final WebClient webClient;
+
     private final HealthCheckService healthCheckService;
 
     @Autowired
-    public PaymentProcessorService(WebClient webClient, HealthCheckService healthCheckService) {
+    public PaymentProcessorService(
+            WebClient webClient, HealthCheckService healthCheckService) {
         this.webClient = webClient;
         this.healthCheckService = healthCheckService;
     }
@@ -27,14 +29,16 @@ public class PaymentProcessorService {
     }
 
     private Mono<Boolean> processPaymentAsync(PaymentRequest request) {
-        HealthCheckService.ProcessorChoice choice = healthCheckService.getBestProcessor();
+        HealthCheckService.ProcessorChoice choice =
+            healthCheckService.getBestProcessor();
 
         return callProcessor(choice.url, request)
             .retryWhen(Retry.fixedDelay(1, Duration.ofMillis(50)))
             .onErrorResume(error -> {
-                HealthCheckService.ProcessorChoice fallback = choice == HealthCheckService.ProcessorChoice.DEFAULT
-                    ? HealthCheckService.ProcessorChoice.FALLBACK 
-                    : HealthCheckService.ProcessorChoice.DEFAULT;
+                HealthCheckService.ProcessorChoice fallback =
+                    choice == HealthCheckService.ProcessorChoice.DEFAULT
+                        ? HealthCheckService.ProcessorChoice.FALLBACK
+                        : HealthCheckService.ProcessorChoice.DEFAULT;
 
                 return callProcessor(fallback.url, request)
                     .retryWhen(Retry.fixedDelay(1, Duration.ofMillis(25)));
@@ -52,7 +56,8 @@ public class PaymentProcessorService {
             .timeout(Duration.ofMillis(600));
     }
 
-    public HealthCheckService.ProcessorChoice getLastUsedProcessor(PaymentRequest request) {
+    public HealthCheckService.ProcessorChoice getLastUsedProcessor(
+            PaymentRequest request) {
         return healthCheckService.getBestProcessor();
     }
 }
